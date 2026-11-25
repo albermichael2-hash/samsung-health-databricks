@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Repository auschecken
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Python-Abhängigkeiten installieren
         run: pip install pandas
@@ -22,10 +22,16 @@ jobs:
           NC_PASS: ${{ secrets.NEXTCLOUD_PASSWORD }}
         run: |
           mkdir -p raw_export data
-          LATEST_FILE=$(curl -s -u "$NC_USER:$NC_PASS" -X PROPFIND "$NC_URL/remote.php/dav/files/$NC_USER/08_Synchronisation/" | grep -oE '[^/]+\.zip' | sort | tail -n 1)
+          
+          # Debug-Ausgabe der WebDAV-Antwort (ohne Passwort)
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -u "$NC_USER:$NC_PASS" -X PROPFIND "$NC_URL/remote.php/dav/files/$NC_USER/08_Synchronisation/")
+          echo "$RESPONSE" | grep "HTTP_CODE"
+          
+          LATEST_FILE=$(echo "$RESPONSE" | grep -oE '[^/>]+\.zip' | sort | tail -n 1)
           
           if [ -z "$LATEST_FILE" ]; then
-            echo "Keine ZIP-Datei gefunden."
+            echo "Keine ZIP-Datei gefunden. Antwort-Auszug:"
+            echo "$RESPONSE" | head -n 20
             exit 1
           fi
           
