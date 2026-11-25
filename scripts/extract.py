@@ -9,9 +9,11 @@ os.makedirs("data", exist_ok=True)
 # 1. Prüfung auf Health Connect SQLite-Datenbank (.db)
 db_files = glob.glob("raw_export/**/*.db", recursive=True)
 if db_files:
-    print(f"SQLite-Datenbank gefunden: {db_files}")
-    conn = sqlite3.connect(db_files)
-    # Alle verfügbaren Tabellen anzeigen (hilfreich fürs Debugging im Log)
+    db_path = db_files[0]
+    print(f"SQLite-Datenbank gefunden: {db_path}")
+    conn = sqlite3.connect(db_path)
+    
+    # Alle verfügbaren Tabellen anzeigen
     tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table'", conn)
     print("Enthaltene Tabellen:", tables["name"].tolist())
     
@@ -19,9 +21,11 @@ if db_files:
         df = pd.read_sql_query("SELECT * FROM nutrition_record_table", conn)
         df.to_csv("data/nutrition_latest.csv", index=False)
         print(f"Erfolgreich extrahiert: data/nutrition_latest.csv ({len(df)} Zeilen)")
+    else:
+        print("Warnung: Tabelle 'nutrition_record_table' nicht gefunden!")
     conn.close()
 
-# 2. Prüfung auf direkte Samsung Health CSVs
+# 2. Prüfung auf direkte Samsung Health CSVs (falls vorhanden)
 for target in ["food_intake", "food_info", "nutrition"]:
     matches = glob.glob(f"raw_export/**/*{target}*.csv", recursive=True)
     if matches:
