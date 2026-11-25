@@ -1,0 +1,45 @@
+name: Sync Health Data from Hetzner Nextcloud
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Python-Abhängigkeiten installieren
+        run: pip install pandas
+
+      - name: Neueste Datei aus Hetzner Nextcloud laden
+        env:
+          NC_URL: ${{ secrets.NEXTCLOUD_URL }}
+          NC_USER: ${{ secrets.NEXTCLOUD_USER }}
+          NC_PASS: ${{ secrets.NEXTCLOUD_PASSWORD }}
+        run: |
+          mkdir -p raw_export data
+          LATEST_FILE=$(curl -s -u "$NC_USER:$NC_PASS" -X PROPFIND "$NC_URL/remote.php/dav/files/$NC_USER/08_Synchronisation/" | grep -oE '[^/]+\.zip' | sort | tail -n 1)
+          
+          if [ -z "$LATEST_FILE" ]; then
+            echo "Keine ZIP-Datei gefunden."
+            exit 1
+          fi
+          
+          echo "Lade Datei: $LATEST_FILE"
+          curl -f -u "$NC_USER:$NC_PASS" "$NC_URL/remote.php/dav/files/$NC_USER/08_Synchronisation/$LATEST_FILE" -o raw_export/export.zip
+          unzip -o raw_export/export.zip -d raw_export/
+
+      - name: Samsung Health Ernährungs-CSVs extrahieren
+        run: python3 scripts/extract.py
+
+      - name: Aktualisierte CSVs ins Repo pushen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@://github.com"
+          git add data/*.csv
+          git commit -m "Automated nutrition data sync" || exit 0
+          git push
