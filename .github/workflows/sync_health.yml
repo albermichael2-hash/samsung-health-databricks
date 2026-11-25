@@ -15,7 +15,7 @@ jobs:
       - name: Python-Abhängigkeiten installieren
         run: pip install pandas
 
-      - name: Neueste Datei aus Hetzner Nextcloud laden
+      - name: Health Connect.zip aus Hetzner Nextcloud laden
         env:
           NC_URL: ${{ secrets.NEXTCLOUD_URL }}
           NC_USER: ${{ secrets.NEXTCLOUD_USER }}
@@ -23,23 +23,21 @@ jobs:
         run: |
           mkdir -p raw_export data
           
-          # Debug-Ausgabe der WebDAV-Antwort (ohne Passwort)
-          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -u "$NC_USER:$NC_PASS" -X PROPFIND "$NC_URL/remote.php/dav/files/$NC_USER/08_Synchronisation/")
-          echo "$RESPONSE" | grep "HTTP_CODE"
+          # URL-encodierter Pfad wegen des Leerzeichens in "Health Connect.zip"
+          FILE_URL="$NC_URL/remote.php/dav/files/$NC_USER/08_Synchronisation/Health%20Connect.zip"
           
-          LATEST_FILE=$(echo "$RESPONSE" | grep -oE '[^/>]+\.zip' | sort | tail -n 1)
+          HTTP_CODE=$(curl -s -w "%{http_code}" -u "$NC_USER:$NC_PASS" "$FILE_URL" -o raw_export/export.zip)
+          echo "HTTP Status Code: $HTTP_CODE"
           
-          if [ -z "$LATEST_FILE" ]; then
-            echo "Keine ZIP-Datei gefunden. Antwort-Auszug:"
-            echo "$RESPONSE" | head -n 20
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Fehler beim Download! Antwort des Servers:"
+            cat raw_export/export.zip
             exit 1
           fi
           
-          echo "Lade Datei: $LATEST_FILE"
-          curl -f -u "$NC_USER:$NC_PASS" "$NC_URL/remote.php/dav/files/$NC_USER/08_Synchronisation/$LATEST_FILE" -o raw_export/export.zip
           unzip -o raw_export/export.zip -d raw_export/
 
-      - name: Samsung Health Ernährungs-CSVs extrahieren
+      - name: Ernährungsdaten extrahieren
         run: python3 scripts/extract.py
 
       - name: Aktualisierte CSVs ins Repo pushen
